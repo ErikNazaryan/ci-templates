@@ -1,0 +1,7 @@
+.helm-deploy:
+  stage: deploy
+  image: alpine/helm:3.12.0
+  script:
+    - helm upgrade --install genesis-gitops-app ./genesis-chart --namespace default --values ./genesis-chart/values.yaml
+
+    

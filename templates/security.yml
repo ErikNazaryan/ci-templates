@@ -1,0 +1,7 @@
+.trivy-scan:
+  stage: test
+  image:
+    name: aquasec/trivy:latest
+    entrypoint: [""]
+  script:
+    - trivy image --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 $IMAGE:$CI_COMMIT_SHORT_SHA
