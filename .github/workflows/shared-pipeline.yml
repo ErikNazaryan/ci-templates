@@ -11,7 +11,48 @@ on:
         required: true
       DOCKER_PASSWORD:
         required: true
+name: Reusable Build and Scan Workflow
 
+on:
+  workflow_call:
+    inputs:
+      image:
+        required: true
+        type: string
+    secrets:
+      REGISTRY_TOKEN:
+        required: true
+
+jobs:
+  build:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        
+      - name: Build Docker Image
+        run: docker build -t ${{ inputs.image }} .
+        
+      - name: Log in to DockerHub
+        run: echo "${{ secrets.REGISTRY_TOKEN }}" | docker login -u "eriknazaryan" --password-stdin
+        
+      - name: Push Docker Image
+        run: docker push ${{ inputs.image }}
+
+  scan:
+    needs: build
+    runs-on: self-hosted
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        
+      - name: Run Trivy Security Scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ inputs.image }}
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1' # 🛑 Gate: Ֆեյլ է անում ջոբը, եթե խոցելիություն գտնի
 jobs:
   test:
     runs-on: self-hosted
