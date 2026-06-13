@@ -1,17 +1,4 @@
-name: Shared CI Cookbook
-
-on:
-  workflow_call:
-    inputs:
-      image_name:
-        required: true
-        type: string
-    secrets:
-      DOCKER_USERNAME:
-        required: true
-      DOCKER_PASSWORD:
-        required: true
-name: Reusable Build and Scan Workflow
+name: Reusable GitOps Pipeline
 
 on:
   workflow_call:
@@ -22,9 +9,11 @@ on:
     secrets:
       REGISTRY_TOKEN:
         required: true
+      GH_BOT_TOKEN:
+        required: true
 
 jobs:
-  build:
+  build-and-scan:
     runs-on: self-hosted
     steps:
       - name: Checkout Code
@@ -39,61 +28,32 @@ jobs:
       - name: Push Docker Image
         run: docker push ${{ inputs.image }}
 
-  scan:
-    needs: build
-    runs-on: self-hosted
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-        
-      - name: Run Trivy Security Scanner
+      - name: Run Trivy Security Scanner (Gate)
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ inputs.image }}
           severity: HIGH,CRITICAL
           ignore-unfixed: true
-          exit-code: '1' # 🛑 Gate: Ֆեյլ է անում ջոբը, եթե խոցելիություն գտնի
-jobs:
-  test:
+          exit-code: '1' # 🛑 Բլոկում է փայփլայնը, եթե խոցելիություն կա
+
+  bump-chart:
+    needs: build-and-scan
     runs-on: self-hosted
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
-      - name: Run App Tests
-        run: |
-          echo "Running unit tests..."
-
-  build-and-scan:
-    runs-on: self-hosted
-    needs: test
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build Docker Image Locally
-        run: |
-          docker build -t ${{ inputs.image_name }}:${{ github.sha }} .
-
-      # 🛡️ TRIVY SECURITY GATE (Blocks pipeline on HIGH or CRITICAL)
-      - name: Run Trivy Vulnerability Scanner
-        uses: aquasecurity/trivy-action@master
         with:
-          image-ref: '${{ inputs.image_name }}:${{ github.sha }}'
-          format: 'table'
-          exit-code: '1'
-          ignore-unfixed: true
-          vuln-type: 'os,library'
-          severity: 'HIGH,CRITICAL'
-
-      - name: Log in to DockerHub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
-      - name: Push Safe Image to DockerHub
+          token: ${{ secrets.GH_BOT_TOKEN }} # 🤖 Պետք է հետ push անելու համար
+          
+      - name: Update Helm Chart Tag
         run: |
-          docker push ${{ inputs.image_name }}:${{ github.sha }}
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          sed -i '' "s/tag:.*/tag:\ \"$SHORT_SHA\"/g" genesis-chart/values.yaml
+          
+      - name: Commit and Push Back (GitOps Loop)
+        run: |
+          git config user.name "Genesis CI Bot"
+          git config user.email "ci-bot@genesis.com"
+          git add genesis-chart/values.yaml
+          git commit -m "ci: update genesis image tag [skip ci]" || echo "No changes to commit"
+          git push origin HEAD:${{ github.ref_name }}
