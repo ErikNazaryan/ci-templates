@@ -21,7 +21,6 @@ jobs:
       - name: Run App Tests
         run: |
           echo "Running unit tests..."
-          # Եթե ունես թեստեր, կարող ես գրել python -m unittest, եթե չէ՝ ուղղակի echo
 
   build-and-scan:
     runs-on: self-hosted
@@ -43,7 +42,7 @@ jobs:
         with:
           image-ref: '${{ inputs.image_name }}:${{ github.sha }}'
           format: 'table'
-          exit-code: '1' # 🎯 Սա ստիպում է փայփլայնին կանգնել, եթե վտանգավոր սխալ կա
+          exit-code: '1'
           ignore-unfixed: true
           vuln-type: 'os,library'
           severity: 'HIGH,CRITICAL'
